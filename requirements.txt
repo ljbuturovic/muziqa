@@ -9,9 +9,9 @@ fonttools==4.62.1
 kiwisolver==1.5.0
     # via matplotlib
 matplotlib==3.10.8
-    # via muzika
+    # via muziqa
 mutagen==1.47.0
-    # via muzika
+    # via muziqa
 numpy==2.4.4
     # via
     #   contourpy
