@@ -2,8 +2,9 @@
 """Analyze artists and years from artists.txt or directly from MP3/FLAC/WAV tags.
 
 Usage:
-  muziqa --artists artists.txt
-  muziqa --folder /path/to/music/dir [--recursive]
+  muziqa /path/to/music/dir
+  muziqa /path/to/music/dir --flat
+  muziqa /path/to/music/dir --artists artists.txt
 """
 
 import argparse
@@ -102,7 +103,7 @@ def _style_ax(ax) -> None:
 def plot_charts(
     artists: Counter,
     years: Counter,
-    output: str = "artists.png",
+    output: str = "muziqa.png",
     top: int = 20,
 ) -> None:
     fig, (ax_artists, ax_years) = plt.subplots(1, 2, figsize=(22, 9))
@@ -178,18 +179,17 @@ def main() -> None:
         description=f"muziqa {v} — plot top artists and tracks by year from a music folder or artists.txt"
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {v}")
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--artists", metavar="FILE", help="Path to artists.txt")
-    group.add_argument("--folder", metavar="DIR", help="Directory of MP3/FLAC/WAV files (reads tags)")
-    parser.add_argument("--recursive", action="store_true", help="Search subfolders recursively (only with --folder)")
-    parser.add_argument("--output", metavar="FILE", default="artists.png", help="Output image file (default: artists.png)")
+    parser.add_argument("folder", metavar="DIR", help="Directory of MP3/FLAC/WAV files (reads tags)")
+    parser.add_argument("--artists", metavar="FILE", help="Path to artists.txt instead of a folder")
+    parser.add_argument("--flat", action="store_true", help="Search only the given folder, not subfolders")
+    parser.add_argument("--output", metavar="FILE", default="muziqa.png", help="Output image file (default: muziqa.png)")
     parser.add_argument("--top", metavar="N", type=int, default=20, help="Number of top artists to plot (default: 20)")
     args = parser.parse_args()
 
-    if args.folder:
-        artists, years = parse_artists_folder(args.folder, recursive=args.recursive)
-    else:
+    if args.artists:
         artists, years = parse_artists_txt(args.artists)
+    else:
+        artists, years = parse_artists_folder(args.folder, recursive=not args.flat)
 
     if not artists:
         print("No artist data found.")
