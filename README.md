@@ -24,7 +24,7 @@ This reads the tags from every supported file in the folder (and all subfolders)
 
 | Option | Description |
 |--------|-------------|
-| `DIR` | Directory of MP3/FLAC/WAV files (reads tags) |
+| `DIR` | Directory of MP3/FLAC/WAV/M4A/OGG files (reads tags) |
 | `--flat` | Search only the given folder, not subfolders |
 | `--artists FILE` | Path to a plain-text `artists.txt` file instead |
 | `--output FILE` | Output image filename (default: `muziqa.png`) |

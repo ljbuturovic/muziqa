@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Analyze artists and years from artists.txt or directly from MP3/FLAC/WAV tags.
+"""Analyze artists and years from artists.txt or directly from MP3/FLAC/WAV/M4A/OGG tags.
 
 Usage:
   muziqa /path/to/music/dir
@@ -37,7 +37,7 @@ def parse_artists_txt(filepath: str) -> tuple[Counter, Counter]:
 
 def _collect_files(folder: Path, recursive: bool) -> list[Path]:
     glob = folder.rglob if recursive else folder.glob
-    return [p for ext in ("*.mp3", "*.flac", "*.wav") for p in glob(ext)]
+    return [p for ext in ("*.mp3", "*.flac", "*.wav", "*.m4a", "*.ogg") for p in glob(ext)]
 
 
 def _read_tags(path: Path) -> tuple[str, str]:
@@ -45,6 +45,8 @@ def _read_tags(path: Path) -> tuple[str, str]:
     from mutagen.id3 import ID3, ID3NoHeaderError
     from mutagen.flac import FLAC
     from mutagen.wave import WAVE
+    from mutagen.mp4 import MP4
+    from mutagen.oggvorbis import OggVorbis
 
     suffix = path.suffix.lower()
     try:
@@ -61,6 +63,14 @@ def _read_tags(path: Path) -> tuple[str, str]:
             id3 = tags.tags
             artist = str(id3["TPE1"]).strip() if id3 and "TPE1" in id3 else ""
             year = str(id3["TDRC"]).strip()[:4] if id3 and "TDRC" in id3 else ""
+        elif suffix == ".m4a":
+            tags = MP4(path)
+            artist = (tags.get("©ART") or [""])[0].strip()
+            year = (tags.get("©day") or [""])[0].strip()[:4]
+        elif suffix == ".ogg":
+            tags = OggVorbis(path)
+            artist = (tags.get("artist") or [""])[0].strip()
+            year = (tags.get("date") or [""])[0].strip()[:4]
         else:
             return "", ""
     except ID3NoHeaderError:
@@ -75,7 +85,7 @@ def parse_artists_folder(directory: str, recursive: bool = False) -> tuple[Count
     years: Counter = Counter()
     files = _collect_files(Path(directory), recursive)
     if not files:
-        print(f"No MP3/FLAC/WAV files found in {directory}")
+        print(f"No MP3/FLAC/WAV/M4A/OGG files found in {directory}")
         sys.exit(1)
 
     print(f"Reading tags from {len(files):,} files…", flush=True)
@@ -176,11 +186,11 @@ def main() -> None:
     from importlib.metadata import version as pkg_version
     v = pkg_version("muziqa")
     parser = argparse.ArgumentParser(
-        description=f"muziqa {v} — plot top artists and tracks by year from a music folder or artists.txt"
+        description=f"muziqa {v} — plot top artists and tracks by year from a music folder"
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {v}")
-    parser.add_argument("folder", metavar="DIR", help="Directory of MP3/FLAC/WAV files (reads tags)")
-    parser.add_argument("--artists", metavar="FILE", help="Path to artists.txt instead of a folder")
+    parser.add_argument("folder", metavar="DIR", help="Directory of MP3/FLAC/WAV/M4A/OGG files (reads tags)")
+    parser.add_argument("--artists", metavar="FILE", help=argparse.SUPPRESS)
     parser.add_argument("--flat", action="store_true", help="Search only the given folder, not subfolders")
     parser.add_argument("--output", metavar="FILE", default="muziqa.png", help="Output image file (default: muziqa.png)")
     parser.add_argument("--top", metavar="N", type=int, default=20, help="Number of top artists to plot (default: 20)")
