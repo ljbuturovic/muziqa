@@ -140,12 +140,12 @@ def plot_charts(
             va="center", ha="left", color="#e0e0e0", fontsize=9, fontweight="bold",
         )
     ax_artists.set_yticks(range(n))
-    ax_artists.set_yticklabels(names, fontsize=10.5, color="#e0e0e0")
     ax_artists.tick_params(axis="y", length=0)
     ax_artists.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
     ax_artists.set_xlabel("Tracks", labelpad=8, color="#888899")
     ax_artists.xaxis.grid(True, color="#222240", linewidth=0.6)
     _style_ax(ax_artists)
+    ax_artists.set_yticklabels(names, fontsize=10.5, color="#ffffff", fontweight="bold")
 
     total = sum(artists.values())
     unique = len(artists)
