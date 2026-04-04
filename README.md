@@ -6,10 +6,10 @@ Analyze your music collection and generate two side-by-side charts:
 
 ![muziqa chart](muziqa.png)
 
-## Install
+## Install (Linux/Mac)
 
 ```
-pipx install muziqa
+$ pipx install muziqa
 ```
 
 ## Usage
