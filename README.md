@@ -7,11 +7,12 @@ Analyze your music collection and generate interesting charts:
 - **Tracks by country** (optional, see below)
 
 ![muziqa chart](muziqa.png)
+![muziqa chart](muziqa_years.png)
 
 ## Install
 
 ```
-pipx install muziqa
+$ pipx install muziqa
 ```
 
 Works on Linux, Mac. Probably Windows too, but I didn't test it
@@ -39,7 +40,9 @@ $ muziqa /path/to/music --country
 Looks up each artist's country of origin from [MusicBrainz](https://musicbrainz.org) and saves a third chart:
 - `muziqa_country.png` — tracks by country
 
-> **Note:** The first run queries MusicBrainz for every unique artist at 1 request/second (required by their API). For a large collection this can take 30–60 minutes. Results are cached in `muziqa_country_cache.json` so subsequent runs are instant.
+![muziqa chart](muziqa_country.png)
+
+> **Note:** The first run queries MusicBrainz for every unique artist at 1 request/second (required by their API). For a large collection this can take a bit of time. Results are cached in `muziqa_country_cache.json` so subsequent runs are instant.
 
 ### All options
 
