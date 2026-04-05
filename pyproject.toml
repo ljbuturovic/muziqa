@@ -1,7 +1,7 @@
 [project]
 name = "muziqa"
-version = "1.0.13"
-description = "Add your description here"
+version = "1.0.15"
+description = "App for various music-file-collection analyses (for example, chart of most popular artists in your MP3 collection)"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

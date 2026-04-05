@@ -168,8 +168,8 @@ def _aggregate_decades(
     return decades, {d: len(s) for d, s in decade_artists.items()}
 
 
-def _mb_lookup(artist: str, user_agent: str) -> str:
-    """Return ISO country code for artist from MusicBrainz, or empty string."""
+def _mb_lookup(artist: str, user_agent: str) -> dict[str, str]:
+    """Return {"country": iso_code, "genre": name} for artist from MusicBrainz."""
     query = urllib.parse.urlencode({"query": f'artist:"{artist}"', "fmt": "json", "limit": 1})
     url = f"https://musicbrainz.org/ws/2/artist/?{query}"
     req = urllib.request.Request(url, headers={"User-Agent": user_agent})
@@ -178,25 +178,47 @@ def _mb_lookup(artist: str, user_agent: str) -> str:
             data = json.loads(resp.read())
             hits = data.get("artists", [])
             if hits:
-                return hits[0].get("country", "")
+                hit = hits[0]
+                country = hit.get("country", "")
+                tags = sorted(hit.get("tags", []), key=lambda t: t.get("count", 0), reverse=True)
+                genre = tags[0]["name"].title() if tags else ""
+                return {"country": country, "genre": genre}
     except Exception:
         pass
-    return ""
+    return {"country": "", "genre": ""}
 
 
-def fetch_countries(artists: Counter, cache_path: Path, version: str) -> dict[str, str]:
-    """Return {artist: iso_code} for all artists, using and updating a local cache."""
-    cache: dict[str, str] = {}
+def fetch_mb_data(artists: Counter, cache_path: Path, version: str,
+                  need_country: bool, need_genre: bool) -> dict[str, dict[str, str]]:
+    """Return {artist: {"country": ..., "genre": ...}}, using and updating a local cache."""
+    cache: dict[str, dict[str, str]] = {}
     if cache_path.exists():
-        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        raw = json.loads(cache_path.read_text(encoding="utf-8"))
+        # migrate old string-valued cache (country only)
+        for k, v in raw.items():
+            cache[k] = v if isinstance(v, dict) else {"country": v, "genre": ""}
+
+    def needs_fetch(artist: str) -> bool:
+        if artist not in cache:
+            return True
+        if need_genre and not cache[artist].get("genre") and cache[artist].get("genre") != "__none__":
+            return True
+        return False
 
     user_agent = f"muziqa/{version} ( https://pypi.org/project/muziqa/ )"
-    to_fetch = [a for a in artists if a not in cache]
+    to_fetch = [a for a in artists if needs_fetch(a)]
 
     if to_fetch:
-        print(f"Fetching country data for {len(to_fetch):,} artists from MusicBrainz…", flush=True)
+        print(f"Fetching data for {len(to_fetch):,} artists from MusicBrainz…", flush=True)
         for i, artist in enumerate(to_fetch, 1):
-            cache[artist] = _mb_lookup(artist, user_agent)
+            result = _mb_lookup(artist, user_agent)
+            # preserve existing country if new lookup returned nothing
+            if artist in cache and not result["country"]:
+                result["country"] = cache[artist].get("country", "")
+            # mark genre as explicitly empty to avoid re-fetching
+            if not result["genre"]:
+                result["genre"] = "__none__"
+            cache[artist] = result
             if i % 50 == 0 or i == len(to_fetch):
                 print(f"  {i:,}/{len(to_fetch):,}", flush=True)
                 cache_path.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -347,32 +369,12 @@ def plot_years(
     plt.close()
 
 
-def plot_country(
-    artists: Counter,
-    country_map: dict[str, str],
-    output: str = "muziqa_country.png",
-    top: int = 20,
-) -> None:
-    # Aggregate tracks by country name
-    country_tracks: Counter = Counter()
-    for artist, count in artists.items():
-        iso = country_map.get(artist, "")
-        name = _ISO_NAMES.get(iso, iso) if iso else "Unknown"
-        country_tracks[name] += count
-
-    top_countries = country_tracks.most_common(top)
-    c_names, c_vals = zip(*top_countries)
-    c_names = c_names[::-1]
-    c_vals = c_vals[::-1]
-    n = len(c_vals)
-
-    fig, ax = plt.subplots(figsize=(12, 8))
-    fig.patch.set_facecolor("#0f0f1a")
-    cmap = plt.colormaps["plasma"]
+def _plot_hbar(ax, labels, vals, title: str, cmap, matched: int, total: int) -> None:
+    """Shared horizontal bar chart for country and genre plots."""
+    n = len(vals)
     colours = [cmap(i / max(n - 1, 1)) for i in range(n)]
-
-    bars = ax.barh(range(n), c_vals, color=colours, edgecolor="none", height=0.72)
-    for bar, val in zip(bars, c_vals):
+    bars = ax.barh(range(n), vals, color=colours, edgecolor="none", height=0.72)
+    for bar, val in zip(bars, vals):
         ax.text(
             bar.get_width() + 0.15, bar.get_y() + bar.get_height() / 2,
             str(val), va="center", ha="left", color="#e0e0e0", fontsize=9, fontweight="bold",
@@ -383,15 +385,67 @@ def plot_country(
     ax.set_xlabel("Tracks", labelpad=8, color="#888899")
     ax.xaxis.grid(True, color="#222240", linewidth=0.6)
     _style_ax(ax)
-    ax.set_yticklabels(c_names, fontsize=10.5, color="#ffffff", fontweight="bold")
-
-    known = sum(v for k, v in country_tracks.items() if k != "Unknown")
-    total = sum(country_tracks.values())
+    ax.set_yticklabels(labels, fontsize=10.5, color="#ffffff", fontweight="bold")
     ax.set_title(
-        f"Top {top} Countries  ·  {known:,}/{total:,} tracks matched",
+        f"{title}  ·  {matched:,}/{total:,} tracks matched",
         fontsize=13, fontweight="bold", color="#c8c8e0", pad=14,
     )
 
+
+def plot_country(
+    artists: Counter,
+    mb_cache: dict[str, dict[str, str]],
+    output: str = "muziqa_country.png",
+    top: int = 20,
+) -> None:
+    country_tracks: Counter = Counter()
+    for artist, count in artists.items():
+        iso = mb_cache.get(artist, {}).get("country", "")
+        name = _ISO_NAMES.get(iso, iso) if iso else "Unknown"
+        country_tracks[name] += count
+
+    top_countries = country_tracks.most_common(top)
+    c_names, c_vals = zip(*top_countries)
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+    fig.patch.set_facecolor("#0f0f1a")
+    _plot_hbar(
+        ax, c_names[::-1], c_vals[::-1], f"Top {top} Countries",
+        plt.colormaps["plasma"],
+        matched=sum(v for k, v in country_tracks.items() if k != "Unknown"),
+        total=sum(country_tracks.values()),
+    )
+    plt.tight_layout()
+    plt.savefig(output, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+    print(f"Saved → {output}")
+    plt.close()
+
+
+def plot_genre(
+    artists: Counter,
+    mb_cache: dict[str, dict[str, str]],
+    output: str = "muziqa_genre.png",
+    top: int = 20,
+) -> None:
+    genre_tracks: Counter = Counter()
+    for artist, count in artists.items():
+        genre = mb_cache.get(artist, {}).get("genre", "")
+        if genre == "__none__":
+            genre = ""
+        name = genre if genre else "Unknown"
+        genre_tracks[name] += count
+
+    top_genres = genre_tracks.most_common(top)
+    g_names, g_vals = zip(*top_genres)
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+    fig.patch.set_facecolor("#0f0f1a")
+    _plot_hbar(
+        ax, g_names[::-1], g_vals[::-1], f"Top {top} Genres",
+        plt.colormaps["plasma"],
+        matched=sum(v for k, v in genre_tracks.items() if k != "Unknown"),
+        total=sum(genre_tracks.values()),
+    )
     plt.tight_layout()
     plt.savefig(output, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
     print(f"Saved → {output}")
@@ -409,6 +463,7 @@ def main() -> None:
     parser.add_argument("--artists", metavar="FILE", help=argparse.SUPPRESS)
     parser.add_argument("--flat", action="store_true", help="Search only the given folder, not subfolders")
     parser.add_argument("--country", action="store_true", help="Fetch artist countries from MusicBrainz and plot by country")
+    parser.add_argument("--genre", action="store_true", help="Fetch artist genres from MusicBrainz and plot by genre")
     parser.add_argument("--output", metavar="FILE", default="muziqa.png", help="Output image file (default: muziqa.png)")
     parser.add_argument("--top", metavar="N", type=int, default=20, help="Number of top artists to plot (default: 20)")
     args = parser.parse_args()
@@ -426,10 +481,14 @@ def main() -> None:
     plot_main(artists, decades, args.output, args.top)
     plot_years(years, year_artists, _infix_output(args.output, "_years"))
 
-    if args.country:
-        cache_path = Path(args.output).with_name("muziqa_country_cache.json")
-        country_map = fetch_countries(artists, cache_path, v)
-        plot_country(artists, country_map, _infix_output(args.output, "_country"), args.top)
+    if args.country or args.genre:
+        cache_path = Path(args.output).with_name("muziqa_mb_cache.json")
+        mb_cache = fetch_mb_data(artists, cache_path, v,
+                                 need_country=args.country, need_genre=args.genre)
+        if args.country:
+            plot_country(artists, mb_cache, _infix_output(args.output, "_country"), args.top)
+        if args.genre:
+            plot_genre(artists, mb_cache, _infix_output(args.output, "_genre"), args.top)
 
 
 if __name__ == "__main__":

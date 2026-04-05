@@ -5,6 +5,7 @@ Analyze your music collection and generate interesting charts:
 - **Tracks by decade**
 - **Tracks by year**, with a 5-year rolling average of mean tracks per artist
 - **Tracks by country** (optional, see below)
+- **Tracks by genre** (optional, see below)
 
 ![muziqa chart](muziqa.png)
 ![muziqa chart](muziqa_years.png)
@@ -15,7 +16,7 @@ Analyze your music collection and generate interesting charts:
 $ pipx install muziqa
 ```
 
-Works on Linux, Mac. Probably Windows too, but I didn't test it
+Works on Linux, Mac. Probably Windows too, but I didn't test it.
 
 ## Usage
 
@@ -31,18 +32,23 @@ Reads tags from all supported files in the folder and subfolders, and saves two 
 
 Supported formats: **MP3, FLAC, WAV, M4A, OGG**
 
-### Country chart
+### Country and genre charts
 
 ```
 $ muziqa /path/to/music --country
+$ muziqa /path/to/music --genre
+$ muziqa /path/to/music --country --genre
 ```
 
-Looks up each artist's country of origin from [MusicBrainz](https://musicbrainz.org) and saves a third chart:
+Looks up each artist's country of origin and genre from [MusicBrainz](https://musicbrainz.org) and saves additional charts:
 - `muziqa_country.png` — tracks by country
+- `muziqa_genre.png` — tracks by genre
 
 ![muziqa chart](muziqa_country.png)
 
-> **Note:** The first --country run queries MusicBrainz for every unique artist at 1 request/second (required by their API). For a large collection this can take a bit of time. Results are cached in `muziqa_country_cache.json` so subsequent runs are instant.
+> **Note:** The first run with `--country` or `--genre` queries MusicBrainz for every unique artist at 1 request/second (required by their API). For a large collection this can take a bit of time. Using both flags together does **not** double the time — data is fetched in a single pass. Results are cached in `muziqa_mb_cache.json` so subsequent runs are instant.
+
+> **Note on "Unknown" genre:** This means MusicBrainz either didn't find the artist or has no community-submitted genre tags for them. It does not affect the rest of the chart.
 
 ### All options
 
@@ -50,7 +56,8 @@ Looks up each artist's country of origin from [MusicBrainz](https://musicbrainz.
 |--------|-------------|
 | `DIR` | Directory of music files to analyze |
 | `--flat` | Search only the given folder, not subfolders |
-| `--country` | Fetch artist countries and plot by country |
+| `--country` | Fetch artist countries from MusicBrainz and plot by country |
+| `--genre` | Fetch artist genres from MusicBrainz and plot by genre |
 | `--output FILE` | Output image filename (default: `muziqa.png`) |
 | `--top N` | Number of top entries to show (default: 20) |
 
@@ -59,6 +66,6 @@ Looks up each artist's country of origin from [MusicBrainz](https://musicbrainz.
 ```
 $ muziqa ~/Music
 $ muziqa ~/Music --flat
-$ muziqa ~/Music --country
+$ muziqa ~/Music --country --genre
 $ muziqa ~/Music --top 30 --output top30.png
 ```
