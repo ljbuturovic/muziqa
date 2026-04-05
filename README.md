@@ -42,7 +42,7 @@ Looks up each artist's country of origin from [MusicBrainz](https://musicbrainz.
 
 ![muziqa chart](muziqa_country.png)
 
-> **Note:** The first run queries MusicBrainz for every unique artist at 1 request/second (required by their API). For a large collection this can take a bit of time. Results are cached in `muziqa_country_cache.json` so subsequent runs are instant.
+> **Note:** The first --country run queries MusicBrainz for every unique artist at 1 request/second (required by their API). For a large collection this can take a bit of time. Results are cached in `muziqa_country_cache.json` so subsequent runs are instant.
 
 ### All options
 
