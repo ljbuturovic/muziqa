@@ -40,7 +40,7 @@ _ISO_NAMES = {
     "HN": "Honduras", "HR": "Croatia", "HT": "Haiti", "HU": "Hungary",
     "ID": "Indonesia", "IE": "Ireland", "IL": "Israel", "IN": "India",
     "IQ": "Iraq", "IR": "Iran", "IS": "Iceland", "IT": "Italy",
-    "JM": "Jamaica", "JO": "Jordan", "JP": "Japan", "KE": "Kenya",
+    "JM": "Jamaica", "JO": "Jordan", "JP": "Japan", "KE": "Kenya", "KR": "South Korea",
     "KG": "Kyrgyzstan", "KH": "Cambodia", "KZ": "Kazakhstan", "LB": "Lebanon",
     "LK": "Sri Lanka", "LT": "Lithuania", "LU": "Luxembourg", "LV": "Latvia",
     "LY": "Libya", "MA": "Morocco", "MD": "Moldova", "ME": "Montenegro",
@@ -63,7 +63,7 @@ _ISO_NAMES = {
     "US": "United States", "UY": "Uruguay", "UZ": "Uzbekistan", "VE": "Venezuela",
     "VN": "Vietnam", "XC": "Czechoslovakia", "XE": "England", "XG": "East Germany",
     "XI": "Northern Ireland", "XS": "Scotland", "XW": "Wales",
-    "XY": "Yugoslavia", "YE": "Yemen", "ZA": "South Africa", "ZM": "Zambia",
+    "XY": "Yugoslavia", "YE": "Yemen", "YU": "Yugoslavia", "PR": "Puerto Rico", "ZA": "South Africa", "ZM": "Zambia",
     "ZW": "Zimbabwe",
 }
 
