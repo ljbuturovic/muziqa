@@ -45,6 +45,7 @@ Looks up each artist's country of origin and genre from [MusicBrainz](https://mu
 - `muziqa_genre.png` — tracks by genre
 
 ![muziqa chart](muziqa_country.png)
+![muziqa chart](muziqa_genre.png)
 
 > **Note:** The first run with `--country` or `--genre` queries MusicBrainz for every unique artist at 1 request/second (required by their API). For a large collection this can take a bit of time. Using both flags together does **not** double the time — data is fetched in a single pass. Results are cached in `muziqa_mb_cache.json` so subsequent runs are instant.
 
