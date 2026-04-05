@@ -1,10 +1,12 @@
 # muziqa
 
-Analyze your music collection and generate two side-by-side charts:
+Analyze your music collection and generate interesting charts:
 - **Top artists** by track count
+- **Tracks by decades**
 - **Tracks by year**, with a 5-year rolling average of mean tracks per artist
 
 ![muziqa chart](muziqa.png)
+![muziqa chart](muziqa_years.png)
 
 ## Install (Linux/Mac)
 
@@ -20,7 +22,7 @@ Point it at a folder of music files:
 $ muziqa /path/to/music
 ```
 
-Reads tags from all supported files in the folder and subfolders, and saves the chart to `muziqa.png` in the current directory.
+Reads tags from all supported files in the folder and subfolders, and saves the charts to `muziqa.png` and `muziqa_years.png` in the current directory.
 
 Supported formats: **MP3, FLAC, WAV, M4A, OGG**
 

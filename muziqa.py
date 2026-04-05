@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
 
-def parse_artists_txt(filepath: str) -> tuple[Counter, Counter, dict[str, int]]:
+def parse_artists_txt(filepath: str) -> tuple[Counter, Counter, dict[str, set]]:
     artist_pattern = re.compile(r"Artist:\s*(.+?)\s*,\s*Year:")
     year_pattern = re.compile(r"Year:\s*(\d{4})")
     artists: Counter = Counter()
@@ -35,7 +35,7 @@ def parse_artists_txt(filepath: str) -> tuple[Counter, Counter, dict[str, int]]:
                 years[year] += 1
                 if name:
                     year_artists[year].add(name)
-    return artists, years, {y: len(s) for y, s in year_artists.items()}
+    return artists, years, dict(year_artists)
 
 
 def _collect_files(folder: Path, recursive: bool) -> list[Path]:
@@ -83,7 +83,7 @@ def _read_tags(path: Path) -> tuple[str, str]:
     return artist, year
 
 
-def parse_artists_folder(directory: str, recursive: bool = False) -> tuple[Counter, Counter, dict[str, int]]:
+def parse_artists_folder(directory: str, recursive: bool = False) -> tuple[Counter, Counter, dict[str, set]]:
     artists: Counter = Counter()
     years: Counter = Counter()
     year_artists: defaultdict[str, set] = defaultdict(set)
@@ -102,7 +102,19 @@ def parse_artists_folder(directory: str, recursive: bool = False) -> tuple[Count
             if artist:
                 year_artists[year].add(artist)
 
-    return artists, years, {y: len(s) for y, s in year_artists.items()}
+    return artists, years, dict(year_artists)
+
+
+def _aggregate_decades(
+    years: Counter, year_artists: dict[str, set]
+) -> tuple[Counter, dict[str, int]]:
+    decades: Counter = Counter()
+    decade_artists: defaultdict[str, set] = defaultdict(set)
+    for year, count in years.items():
+        decade = year[:3] + "0s"
+        decades[decade] += count
+        decade_artists[decade] |= year_artists.get(year, set())
+    return decades, {d: len(s) for d, s in decade_artists.items()}
 
 
 def _style_ax(ax) -> None:
@@ -116,17 +128,7 @@ def _style_ax(ax) -> None:
     ax.set_axisbelow(True)
 
 
-def plot_charts(
-    artists: Counter,
-    years: Counter,
-    year_unique: dict[str, int],
-    output: str = "muziqa.png",
-    top: int = 20,
-) -> None:
-    fig, (ax_artists, ax_years) = plt.subplots(1, 2, figsize=(22, 9))
-    fig.patch.set_facecolor("#0f0f1a")
-
-    # --- Artists (left) ---
+def _plot_artists(ax, artists: Counter, top: int, cmap) -> None:
     top_artists = artists.most_common(top)
     if len(top_artists) < top:
         print(f"Warning: only {len(top_artists)} artists found.")
@@ -134,79 +136,121 @@ def plot_charts(
     names = names[::-1]
     a_vals = a_vals[::-1]
     n = len(a_vals)
-
-    cmap = plt.colormaps["plasma"]
     colours = [cmap(i / max(n - 1, 1)) for i in range(n)]
 
-    bars = ax_artists.barh(range(n), a_vals, color=colours, edgecolor="none", height=0.72)
+    bars = ax.barh(range(n), a_vals, color=colours, edgecolor="none", height=0.72)
     for bar, val in zip(bars, a_vals):
-        ax_artists.text(
-            bar.get_width() + 0.15,
-            bar.get_y() + bar.get_height() / 2,
-            str(val),
-            va="center", ha="left", color="#e0e0e0", fontsize=9, fontweight="bold",
+        ax.text(
+            bar.get_width() + 0.15, bar.get_y() + bar.get_height() / 2,
+            str(val), va="center", ha="left", color="#e0e0e0", fontsize=9, fontweight="bold",
         )
-    ax_artists.set_yticks(range(n))
-    ax_artists.tick_params(axis="y", length=0)
-    ax_artists.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
-    ax_artists.set_xlabel("Tracks", labelpad=8, color="#888899")
-    ax_artists.xaxis.grid(True, color="#222240", linewidth=0.6)
-    _style_ax(ax_artists)
-    ax_artists.set_yticklabels(names, fontsize=10.5, color="#ffffff", fontweight="bold")
+    ax.set_yticks(range(n))
+    ax.tick_params(axis="y", length=0)
+    ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+    ax.set_xlabel("Tracks", labelpad=8, color="#888899")
+    ax.xaxis.grid(True, color="#222240", linewidth=0.6)
+    _style_ax(ax)
+    ax.set_yticklabels(names, fontsize=10.5, color="#ffffff", fontweight="bold")
 
     total = sum(artists.values())
     unique = len(artists)
-    ax_artists.set_title(
+    ax.set_title(
         f"Top {top} Artists  ·  {total:,} tracks  ·  {unique:,} unique artists",
         fontsize=13, fontweight="bold", color="#c8c8e0", pad=14,
     )
 
-    # --- Years (right) ---
-    sorted_years = sorted(years.items(), key=lambda x: x[0])
+
+def _plot_time_bars(ax, labels, vals, title: str, cmap,
+                    unique_counts: dict[str, int] | None = None, rolling: bool = False) -> None:
+    """Bar chart, with an optional mean-tracks-per-artist line on a twin axis."""
+    n = len(vals)
+    colours = [cmap(i / max(n - 1, 1)) for i in range(n)]
+
+    ax.bar(range(n), vals, color=colours, edgecolor="none", width=0.72)
+    ax.set_xticks(range(n))
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=9, color="#e0e0e0")
+    ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+    ax.set_ylabel("Tracks", labelpad=8, color="#888899")
+    ax.yaxis.grid(True, color="#222240", linewidth=0.6)
+    _style_ax(ax)
+    ax.tick_params(axis="x", length=0, colors="#e0e0e0")
+    ax.spines["left"].set_visible(False)
+    ax.set_title(title, fontsize=13, fontweight="bold", color="#c8c8e0", pad=14)
+
+    if unique_counts is None:
+        return
+
+    mean_vals = [vals[i] / unique_counts[labels[i]] if unique_counts.get(labels[i]) else None for i in range(n)]
+
+    if rolling:
+        window = 5
+        line_vals = []
+        for i in range(n):
+            chunk = [v for v in mean_vals[max(0, i - window // 2):i + window // 2 + 1] if v is not None]
+            line_vals.append(sum(chunk) / len(chunk) if chunk else None)
+    else:
+        line_vals = mean_vals
+
+    ax_twin = ax.twinx()
+    ax_twin.set_facecolor("none")
+    ax_twin.plot(range(n), line_vals, color="#00e5ff", linewidth=2.5, zorder=5)
+    ax_twin.set_ylabel("Mean tracks per artist", labelpad=8, color="#00e5ff")
+    ax_twin.tick_params(axis="y", colors="#00e5ff", labelsize=9, length=0)
+    ax_twin.spines["top"].set_visible(False)
+    ax_twin.spines["left"].set_visible(False)
+    ax_twin.spines["bottom"].set_visible(False)
+    ax_twin.spines["right"].set_color("#00e5ff")
+    ax_twin.spines["right"].set_alpha(0.4)
+
+
+def _years_output(output: str) -> str:
+    p = Path(output)
+    return str(p.with_stem(p.stem + "_years"))
+
+
+def plot_main(
+    artists: Counter,
+    decades: Counter,
+    output: str = "muziqa.png",
+    top: int = 20,
+) -> None:
+    fig, (ax_artists, ax_decades) = plt.subplots(1, 2, figsize=(22, 9))
+    fig.patch.set_facecolor("#0f0f1a")
+    cmap = plt.colormaps["plasma"]
+
+    _plot_artists(ax_artists, artists, top, cmap)
+
+    sorted_decades = sorted(decades.items())
+    d_labels, d_vals = zip(*sorted_decades) if sorted_decades else ([], [])
+    _plot_time_bars(
+        ax_decades, d_labels, d_vals,
+        f"Tracks by Decade  ·  {len(decades):,} decades",
+        cmap,
+    )
+
+    plt.tight_layout()
+    plt.savefig(output, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+    print(f"Saved → {output}")
+    plt.show()
+
+
+def plot_years(
+    years: Counter,
+    year_artists: dict[str, set],
+    output: str = "muziqa_years.png",
+) -> None:
+    year_unique = {y: len(s) for y, s in year_artists.items()}
+    sorted_years = sorted(years.items())
     yr_labels, yr_vals = zip(*sorted_years) if sorted_years else ([], [])
 
-    y_n = len(yr_vals)
-    yr_colours = [cmap(i / max(y_n - 1, 1)) for i in range(y_n)]
+    fig, ax = plt.subplots(figsize=(14, 7))
+    fig.patch.set_facecolor("#0f0f1a")
+    cmap = plt.colormaps["plasma"]
 
-    ax_years.bar(range(y_n), yr_vals, color=yr_colours, edgecolor="none", width=0.72)
-    ax_years.set_xticks(range(y_n))
-    ax_years.set_xticklabels(yr_labels, rotation=45, ha="right", fontsize=9, color="#e0e0e0")
-    ax_years.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
-    ax_years.set_ylabel("Tracks", labelpad=8, color="#888899")
-    ax_years.yaxis.grid(True, color="#222240", linewidth=0.6)
-    _style_ax(ax_years)
-    ax_years.tick_params(axis="x", length=0, colors="#e0e0e0")
-    ax_years.spines["left"].set_visible(False)
-
-    # 5-year rolling average of mean tracks per unique artist (twin axis)
-    mean_vals = [
-        years[yr] / year_unique[yr] if year_unique.get(yr) else None
-        for yr in yr_labels
-    ]
-    window = 5
-    rolled = []
-    for i in range(y_n):
-        window_vals = [v for v in mean_vals[max(0, i - window // 2):i + window // 2 + 1] if v is not None]
-        rolled.append(sum(window_vals) / len(window_vals) if window_vals else None)
-
-    ax_mean = ax_years.twinx()
-    ax_mean.set_facecolor("none")
-    ax_mean.plot(
-        range(y_n), rolled,
-        color="#00e5ff", linewidth=2.5,
-        label="5-yr rolling avg tracks / artist", zorder=5,
-    )
-    ax_mean.set_ylabel("Mean tracks per artist", labelpad=8, color="#00e5ff")
-    ax_mean.tick_params(axis="y", colors="#00e5ff", labelsize=9, length=0)
-    ax_mean.spines["top"].set_visible(False)
-    ax_mean.spines["left"].set_visible(False)
-    ax_mean.spines["bottom"].set_visible(False)
-    ax_mean.spines["right"].set_color("#00e5ff")
-    ax_mean.spines["right"].set_alpha(0.4)
-
-    ax_years.set_title(
-        f"Tracks by Year  ·  {len(years):,} years",
-        fontsize=13, fontweight="bold", color="#c8c8e0", pad=14,
+    _plot_time_bars(
+        ax, yr_labels, yr_vals,
+        f"Tracks by Year  ·  {len(years):,} years  ·  5-yr rolling avg",
+        cmap, unique_counts=year_unique, rolling=True,
     )
 
     plt.tight_layout()
@@ -219,7 +263,7 @@ def main() -> None:
     from importlib.metadata import version as pkg_version
     v = pkg_version("muziqa")
     parser = argparse.ArgumentParser(
-        description=f"muziqa {v} — plot top artists and tracks by year from a music folder"
+        description=f"muziqa {v} — plot top artists and tracks by decade/year from a music folder"
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {v}")
     parser.add_argument("folder", metavar="DIR", help="Directory of MP3/FLAC/WAV/M4A/OGG files (reads tags)")
@@ -230,15 +274,17 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.artists:
-        artists, years, year_unique = parse_artists_txt(args.artists)
+        artists, years, year_artists = parse_artists_txt(args.artists)
     else:
-        artists, years, year_unique = parse_artists_folder(args.folder, recursive=not args.flat)
+        artists, years, year_artists = parse_artists_folder(args.folder, recursive=not args.flat)
 
     if not artists:
         print("No artist data found.")
         sys.exit(1)
 
-    plot_charts(artists, years, year_unique, args.output, args.top)
+    decades, _ = _aggregate_decades(years, year_artists)
+    plot_main(artists, decades, args.output, args.top)
+    plot_years(years, year_artists, _years_output(args.output))
 
 
 if __name__ == "__main__":

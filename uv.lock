@@ -797,7 +797,7 @@ wheels = [
 
 [[package]]
 name = "muziqa"
-version = "1.0.3"
+version = "1.0.6"
 source = { virtual = "." }
 dependencies = [
     { name = "matplotlib" },
