@@ -4,9 +4,11 @@ Analyze your MP3 music collection and generate interesting charts:
 - **Top artists** by track count
 - **Tracks by decades**
 - **Tracks by year**, with a 5-year rolling average of mean tracks per artist
+- **Tracks by country**
 
 ![muziqa chart](muziqa.png)
 ![muziqa chart](muziqa_years.png)
+![muziqa chart](muziqa_country.png)
 
 ## Install (Linux/Mac)
 
