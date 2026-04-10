@@ -1,6 +1,6 @@
 # muziqa
 
-Analyze your music collection and generate interesting charts:
+Analyze your music collection and generate interesting charts using command-line:
 - **Top artists** by track count
 - **Tracks by decade**
 - **Tracks by year**, with a 5-year rolling average of mean tracks per artist
