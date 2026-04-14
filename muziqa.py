@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Analyze artists and years from artists.txt or directly from MP3/FLAC/WAV/M4A/OGG tags.
+"""Analyze artists and years from your MP3/FLAC/WAV/M4A/OGG collection. Create MP3 playlist using AI.
 
 Usage:
   muziqa /path/to/music/dir
   muziqa /path/to/music/dir --flat
   muziqa /path/to/music/dir --country
+  muziqa /path/to/music/dir --playlist "Cool low-tempo tracks, one hour max, two songs per artist max"
 """
 
 import argparse
@@ -631,7 +632,7 @@ def main() -> None:
     from importlib.metadata import version as pkg_version
     v = pkg_version("muziqa")
     parser = argparse.ArgumentParser(
-        description=f"muziqa {v} — plot top artists and tracks by decade/year from a music folder"
+        description=f"muziqa {v} - plot interesting graphs about your music folder. Create AI playlist of your tracks"
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {v}")
     parser.add_argument("folder", metavar="DIR", help="Directory of MP3/FLAC/WAV/M4A/OGG files (reads tags)")
@@ -639,7 +640,7 @@ def main() -> None:
     parser.add_argument("--flat", action="store_true", help="Search only the given folder, not subfolders")
     parser.add_argument("--country", action="store_true", help="Fetch artist countries from MusicBrainz and plot by country")
     parser.add_argument("--genre", action="store_true", help="Fetch artist genres from MusicBrainz and plot by genre")
-    parser.add_argument("--playlist", metavar="DESC", help="Create a playlist MP3 matching the given description (requires ANTHROPIC_API_KEY and ffmpeg)")
+    parser.add_argument("--playlist", metavar="DESC", help="Create an AI MP3 playlist matching the given description (requires ANTHROPIC_API_KEY and ffmpeg)")
     parser.add_argument("--playlist-output", metavar="FILE", default="playlist.mp3", help="Output file for playlist (default: playlist.mp3)")
     parser.add_argument("--model", metavar="MODEL", default="claude-sonnet-4-6", help="Claude model for --playlist (default: claude-sonnet-4-6). Tip: use 'llm-models -p Anthropic' to list available models --> github.com/ljbuturovic/llm-models")
     parser.add_argument("--output", metavar="FILE", default="muziqa.png", help="Output image file (default: muziqa.png)")
