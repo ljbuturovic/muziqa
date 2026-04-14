@@ -10,6 +10,12 @@ Analyze your music collection and generate interesting charts using command-line
 ![muziqa chart](muziqa.png)
 ![muziqa chart](muziqa_years.png)
 
+Also create MP3 playlists using Anthropic Claude LLM. Example:
+
+```
+$ muziqa Music --playlist "Playlist of rock tunes where lead guitar is as close as possible to the picking style of Mark Knopfler. Max 1 hour. Max one song per artist." --playlist-output mark.mp3
+```
+
 ## Install
 
 ```
@@ -63,6 +69,9 @@ Looks up each artist's country of origin and genre from [MusicBrainz](https://mu
 | `--genre` | Fetch artist genres from MusicBrainz and plot by genre |
 | `--output FILE` | Output image filename (default: `muziqa.png`) |
 | `--top N` | Number of top entries to show (default: 20) |
+| `-playlist DESC` | Create a playlist MP3 matching the given description (requires ANTHROPIC_API_KEY and ffmpeg) |
+| `--playlist-output FILE` | Output file for playlist (default: playlist.mp3) |
+| `--model MODEL` | Claude model for --playlist (default: claude-sonnet-4-6). Tip: use 'llm-models -p Anthropic' to list available models --> github.com/ljbuturovic/llm-models|
 
 ### Examples
 
