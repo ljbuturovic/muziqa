@@ -452,6 +452,163 @@ def plot_genre(
     plt.close()
 
 
+def _read_track_info(path: Path) -> dict | None:
+    """Return {artist, title, duration_sec, path} or None if unreadable."""
+    from mutagen.id3 import ID3NoHeaderError
+    from mutagen.mp3 import MP3
+    from mutagen.flac import FLAC
+    from mutagen.wave import WAVE
+    from mutagen.mp4 import MP4
+    from mutagen.oggvorbis import OggVorbis
+
+    suffix = path.suffix.lower()
+    try:
+        if suffix == ".mp3":
+            audio = MP3(path)
+            tags = audio.tags or {}
+            artist = str(tags.get("TPE1", "")).strip()
+            title = str(tags.get("TIT2", "")).strip()
+            duration = audio.info.length
+        elif suffix == ".flac":
+            audio = FLAC(path)
+            artist = (audio.get("artist") or [""])[0].strip()
+            title = (audio.get("title") or [""])[0].strip()
+            duration = audio.info.length
+        elif suffix == ".wav":
+            audio = WAVE(path)
+            id3 = audio.tags
+            artist = str(id3.get("TPE1", "")).strip() if id3 else ""
+            title = str(id3.get("TIT2", "")).strip() if id3 else ""
+            duration = audio.info.length
+        elif suffix == ".m4a":
+            audio = MP4(path)
+            artist = (audio.get("©ART") or [""])[0].strip()
+            title = (audio.get("©nam") or [""])[0].strip()
+            duration = audio.info.length
+        elif suffix == ".ogg":
+            audio = OggVorbis(path)
+            artist = (audio.get("artist") or [""])[0].strip()
+            title = (audio.get("title") or [""])[0].strip()
+            duration = audio.info.length
+        else:
+            return None
+    except ID3NoHeaderError:
+        return None
+    except Exception:
+        return None
+
+    return {
+        "artist": artist or path.stem,
+        "title": title or path.stem,
+        "duration_sec": duration,
+        "path": str(path),
+    }
+
+
+def _fmt_duration(secs: float) -> str:
+    m, s = divmod(int(secs), 60)
+    h, m = divmod(m, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def create_playlist(files: list[Path], description: str, output: str) -> None:
+    import os
+    import warnings
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        print(
+            "This feature requires ANTHROPIC_API_KEY. "
+            "Instructions for getting one: "
+            "https://github.com/ljbuturovic/refren/blob/main/SETUP.md"
+        )
+        sys.exit(1)
+
+    try:
+        import anthropic
+    except ImportError:
+        print("Missing dependency: pip install anthropic")
+        sys.exit(1)
+
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=SyntaxWarning)
+            from pydub import AudioSegment
+    except ImportError:
+        print("Missing dependency: pip install pydub  (also requires ffmpeg)")
+        sys.exit(1)
+
+    print(f"Reading track info from {len(files):,} files…", flush=True)
+    tracks = [t for f in files if (t := _read_track_info(f)) is not None]
+
+    # Send indices to Claude — avoids Unicode path mangling in the response
+    lines = [
+        f"{i} | {t['artist']} | {t['title']} | {_fmt_duration(t['duration_sec'])}"
+        for i, t in enumerate(tracks)
+    ]
+    track_list = "\n".join(lines)
+
+    prompt = f"""Here is a music collection with {len(tracks):,} tracks (format: index | artist | title | duration):
+
+{track_list}
+
+Playlist request: {description}
+
+Select tracks from this collection that best match the request. Return ONLY a JSON array of integer indices in playback order, with no other text. Example:
+[42, 7, 195, 3]"""
+
+    print("Asking Claude to build the playlist…", flush=True)
+    client = anthropic.Anthropic(api_key=api_key)
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=4096,
+        system=(
+            "You are a music expert and playlist curator. "
+            "When given a music collection and a playlist description, you select and order "
+            "tracks to best match the description, respecting any duration constraints. "
+            "You return only valid JSON — a single array of integer indices, nothing else."
+        ),
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    response_text = message.content[0].text.strip()
+    start = response_text.find("[")
+    end = response_text.rfind("]") + 1
+    if start == -1 or end == 0:
+        print("Error: Claude did not return a valid playlist.")
+        sys.exit(1)
+
+    indices = json.loads(response_text[start:end])
+    if not indices:
+        print("Error: Claude returned an empty playlist.")
+        sys.exit(1)
+
+    selected = []
+    for idx in indices:
+        if isinstance(idx, int) and 0 <= idx < len(tracks):
+            selected.append(tracks[idx])
+        else:
+            print(f"  Warning: ignoring invalid index {idx}")
+
+    print(f"\nPlaylist: {len(selected)} tracks")
+    for i, t in enumerate(selected, 1):
+        print(f"  {i:2}. {t['artist']} — {t['title']}")
+
+    print("\nConcatenating…", flush=True)
+    fmt_map = {".mp3": "mp3", ".flac": "flac", ".wav": "wav", ".m4a": "mp4", ".ogg": "ogg"}
+    combined = AudioSegment.empty()
+    for t in selected:
+        path = Path(t["path"])
+        fmt = fmt_map.get(path.suffix.lower(), "mp3")
+        try:
+            combined += AudioSegment.from_file(t["path"], format=fmt)
+        except Exception as e:
+            print(f"  Warning: skipping {path.name} ({e})")
+
+    combined.export(output, format="mp3")
+    print(f"Saved → {output}  ({len(combined) // 60000} min)")
+
+
 def main() -> None:
     from importlib.metadata import version as pkg_version
     v = pkg_version("muziqa")
@@ -464,6 +621,8 @@ def main() -> None:
     parser.add_argument("--flat", action="store_true", help="Search only the given folder, not subfolders")
     parser.add_argument("--country", action="store_true", help="Fetch artist countries from MusicBrainz and plot by country")
     parser.add_argument("--genre", action="store_true", help="Fetch artist genres from MusicBrainz and plot by genre")
+    parser.add_argument("--playlist", metavar="DESC", help="Create a playlist MP3 matching the given description (requires ANTHROPIC_API_KEY and ffmpeg)")
+    parser.add_argument("--playlist-output", metavar="FILE", default="playlist.mp3", help="Output file for playlist (default: playlist.mp3)")
     parser.add_argument("--output", metavar="FILE", default="muziqa.png", help="Output image file (default: muziqa.png)")
     parser.add_argument("--top", metavar="N", type=int, default=20, help="Number of top artists to plot (default: 20)")
     args = parser.parse_args()
@@ -489,6 +648,10 @@ def main() -> None:
             plot_country(artists, mb_cache, _infix_output(args.output, "_country"), args.top)
         if args.genre:
             plot_genre(artists, mb_cache, _infix_output(args.output, "_genre"), args.top)
+
+    if args.playlist:
+        files = _collect_files(Path(args.folder), recursive=not args.flat)
+        create_playlist(files, args.playlist, args.playlist_output)
 
 
 if __name__ == "__main__":
