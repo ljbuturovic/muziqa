@@ -517,7 +517,7 @@ def _fmt_duration(secs: float) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
-def create_playlist(files: list[Path], description: str, output: str) -> None:
+def create_playlist(files: list[Path], description: str, output: str, model: str = "claude-sonnet-4-6") -> None:
     import os
     import warnings
 
@@ -568,7 +568,7 @@ Select tracks from this collection that satisfy ALL constraints. Return ONLY a J
     print("Asking Claude to build the playlist…", flush=True)
     client = anthropic.Anthropic(api_key=api_key)
     message = client.messages.create(
-        model="claude-sonnet-4-6",
+        model=model,
         max_tokens=4096,
         system=(
             "You are a music expert and playlist curator. "
@@ -641,6 +641,7 @@ def main() -> None:
     parser.add_argument("--genre", action="store_true", help="Fetch artist genres from MusicBrainz and plot by genre")
     parser.add_argument("--playlist", metavar="DESC", help="Create a playlist MP3 matching the given description (requires ANTHROPIC_API_KEY and ffmpeg)")
     parser.add_argument("--playlist-output", metavar="FILE", default="playlist.mp3", help="Output file for playlist (default: playlist.mp3)")
+    parser.add_argument("--model", metavar="MODEL", default="claude-sonnet-4-6", help="Claude model for --playlist (default: claude-sonnet-4-6). Tip: use 'llm-models -p Anthropic' to list available models --> github.com/ljbuturovic/llm-models")
     parser.add_argument("--output", metavar="FILE", default="muziqa.png", help="Output image file (default: muziqa.png)")
     parser.add_argument("--top", metavar="N", type=int, default=20, help="Number of top artists to plot (default: 20)")
     args = parser.parse_args()
@@ -669,7 +670,7 @@ def main() -> None:
 
     if args.playlist:
         files = _collect_files(Path(args.folder), recursive=not args.flat)
-        create_playlist(files, args.playlist, args.playlist_output)
+        create_playlist(files, args.playlist, args.playlist_output, args.model)
 
 
 if __name__ == "__main__":
