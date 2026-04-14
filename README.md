@@ -20,11 +20,13 @@ Works on Linux, Mac. Probably Windows too, but I didn't test it.
 
 ## Usage
 
-Point it at a folder of music files:
+No API keys, no accounts, no streaming service — just point muziqa to a folder of music files:
 
 ```
 $ muziqa /path/to/music
 ```
+
+
 
 Reads tags from all supported files in the folder and subfolders, and saves two charts:
 - `muziqa.png` — top artists + tracks by decade
