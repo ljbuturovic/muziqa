@@ -468,27 +468,32 @@ def _read_track_info(path: Path) -> dict | None:
             tags = audio.tags or {}
             artist = str(tags.get("TPE1", "")).strip()
             title = str(tags.get("TIT2", "")).strip()
+            year = str(tags.get("TDRC", "")).strip()[:4]
             duration = audio.info.length
         elif suffix == ".flac":
             audio = FLAC(path)
             artist = (audio.get("artist") or [""])[0].strip()
             title = (audio.get("title") or [""])[0].strip()
+            year = (audio.get("date") or [""])[0].strip()[:4]
             duration = audio.info.length
         elif suffix == ".wav":
             audio = WAVE(path)
             id3 = audio.tags
             artist = str(id3.get("TPE1", "")).strip() if id3 else ""
             title = str(id3.get("TIT2", "")).strip() if id3 else ""
+            year = str(id3.get("TDRC", "")).strip()[:4] if id3 else ""
             duration = audio.info.length
         elif suffix == ".m4a":
             audio = MP4(path)
             artist = (audio.get("©ART") or [""])[0].strip()
             title = (audio.get("©nam") or [""])[0].strip()
+            year = (audio.get("©day") or [""])[0].strip()[:4]
             duration = audio.info.length
         elif suffix == ".ogg":
             audio = OggVorbis(path)
             artist = (audio.get("artist") or [""])[0].strip()
             title = (audio.get("title") or [""])[0].strip()
+            year = (audio.get("date") or [""])[0].strip()[:4]
             duration = audio.info.length
         else:
             return None
@@ -500,6 +505,7 @@ def _read_track_info(path: Path) -> dict | None:
     return {
         "artist": artist or path.stem,
         "title": title or path.stem,
+        "year": year,
         "duration_sec": duration,
         "path": str(path),
     }
@@ -607,6 +613,15 @@ Select tracks from this collection that best match the request. Return ONLY a JS
 
     combined.export(output, format="mp3")
     print(f"Saved → {output}  ({len(combined) // 60000} min)")
+
+    import csv
+    csv_path = Path(output).with_stem(Path(output).stem + "_tracks").with_suffix(".csv")
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["#", "title", "artist", "year", "file"])
+        for i, t in enumerate(selected, 1):
+            writer.writerow([i, t["title"], t["artist"], t["year"], Path(t["path"]).name])
+    print(f"Saved → {csv_path}")
 
 
 def main() -> None:
