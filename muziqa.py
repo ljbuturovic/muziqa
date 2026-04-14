@@ -560,7 +560,9 @@ def create_playlist(files: list[Path], description: str, output: str) -> None:
 
 Playlist request: {description}
 
-Select tracks from this collection that best match the request. Return ONLY a JSON array of integer indices in playback order, with no other text. Example:
+IMPORTANT: Every constraint in the request (duration limit, max songs per artist, lead tune, mood, tempo, etc.) is a HARD rule — not a suggestion. Violating any constraint makes the playlist wrong.
+
+Select tracks from this collection that satisfy ALL constraints. Return ONLY a JSON array of integer indices in playback order, with no other text. Example:
 [42, 7, 195, 3]"""
 
     print("Asking Claude to build the playlist…", flush=True)
@@ -570,8 +572,9 @@ Select tracks from this collection that best match the request. Return ONLY a JS
         max_tokens=4096,
         system=(
             "You are a music expert and playlist curator. "
-            "When given a music collection and a playlist description, you select and order "
-            "tracks to best match the description, respecting any duration constraints. "
+            "You select and order tracks to match a playlist description. "
+            "All constraints (duration, artist limits, mood, tempo, lead tune) are HARD rules — treat them like law, not suggestions. "
+            "Do not add more songs by an artist than allowed. Do not exceed the duration limit. "
             "You return only valid JSON — a single array of integer indices, nothing else."
         ),
         messages=[{"role": "user", "content": prompt}],
