@@ -10,7 +10,7 @@ Analyze your music collection and generate interesting charts using command-line
 ![muziqa chart](muziqa.png)
 ![muziqa chart](muziqa_years.png)
 
-Also create MP3 playlists using Anthropic Claude LLM. The generated playlist is an MP3 file of your songs, picked by AI, per your prompt. Example:
+Also create MP3 playlist using Anthropic Claude LLM. The generated playlist is an MP3 file of your songs, picked by AI, per your prompt. Example:
 
 ```
 $ muziqa Music --playlist "Playlist of rock tunes where lead guitar is as close as possible to the picking style of Mark Knopfler. Max 1 hour. Max one song per artist." --playlist-output mark.mp3
