@@ -1009,7 +1009,7 @@ wheels = [
 
 [[package]]
 name = "muziqa"
-version = "1.0.21"
+version = "1.0.22"
 source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },

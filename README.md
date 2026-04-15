@@ -18,11 +18,20 @@ $ muziqa Music --playlist "Playlist of rock tunes where lead guitar is as close 
 
 ## Install
 
+**Linux / Mac:**
 ```
 $ pipx install muziqa
 ```
 
-Works on Linux, Mac. Probably Windows too, but I didn't test it.
+**Windows** (PowerShell):
+```
+winget install Python.Python.3   # if Python not already installed
+pip install pipx
+pipx ensurepath                   # restart terminal after this
+pipx install muziqa
+```
+
+> **Windows + `--playlist`:** also install ffmpeg: `winget install ffmpeg`
 
 ## Usage
 
