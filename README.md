@@ -23,11 +23,11 @@ $ muziqa Music --playlist "Playlist of rock tunes where lead guitar is as close 
 $ pipx install muziqa
 ```
 
-**Windows** (PowerShell):
+**Windows** (PowerShell; NOTE: untested):
 ```
 winget install Python.Python.3   # if Python not already installed
 pip install pipx
-pipx ensurepath                   # restart terminal after this
+pipx ensurepath                  # restart terminal after this
 pipx install muziqa
 ```
 
