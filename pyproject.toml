@@ -1,6 +1,6 @@
 [project]
 name = "muziqa"
-version = "1.0.22"
+version = "1.0.23"
 description = "App for various music-file-collection analyses (for example, chart of most popular artists in your MP3 collection) and AI playlist generation"
 readme = "README.md"
 requires-python = ">=3.10"

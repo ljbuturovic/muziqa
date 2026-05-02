@@ -4,7 +4,8 @@
 Usage:
   muziqa /path/to/music/dir
   muziqa /path/to/music/dir --flat
-  muziqa /path/to/music/dir --country
+  muziqa /path/to/music/dir --country --genre
+  muziqa /path/to/music/dir --strict           (skip Remaster + Classical)
   muziqa /path/to/music/dir --playlist "Cool low-tempo tracks, one hour max, two songs per artist max"
 """
 
@@ -95,8 +96,8 @@ def _collect_files(folder: Path, recursive: bool) -> list[Path]:
     return [p for ext in ("*.mp3", "*.flac", "*.wav", "*.m4a", "*.ogg") for p in glob(ext)]
 
 
-def _read_tags(path: Path) -> tuple[str, str]:
-    """Return (artist, year) strings from a music file, empty string if not found."""
+def _read_tags(path: Path) -> tuple[str, str, str]:
+    """Return (artist, year, genre) strings from a music file, empty string if not found."""
     from mutagen.id3 import ID3, ID3NoHeaderError
     from mutagen.flac import FLAC
     from mutagen.wave import WAVE
@@ -109,33 +110,38 @@ def _read_tags(path: Path) -> tuple[str, str]:
             tags = ID3(path)
             artist = str(tags["TPE1"]).strip() if "TPE1" in tags else ""
             year = str(tags["TDRC"]).strip()[:4] if "TDRC" in tags else ""
+            genre = str(tags["TCON"]).strip() if "TCON" in tags else ""
         elif suffix == ".flac":
             tags = FLAC(path)
             artist = (tags.get("artist") or [""])[0].strip()
             year = (tags.get("date") or [""])[0].strip()[:4]
+            genre = (tags.get("genre") or [""])[0].strip()
         elif suffix == ".wav":
             tags = WAVE(path)
             id3 = tags.tags
             artist = str(id3["TPE1"]).strip() if id3 and "TPE1" in id3 else ""
             year = str(id3["TDRC"]).strip()[:4] if id3 and "TDRC" in id3 else ""
+            genre = str(id3["TCON"]).strip() if id3 and "TCON" in id3 else ""
         elif suffix == ".m4a":
             tags = MP4(path)
             artist = (tags.get("©ART") or [""])[0].strip()
             year = (tags.get("©day") or [""])[0].strip()[:4]
+            genre = (tags.get("©gen") or [""])[0].strip()
         elif suffix == ".ogg":
             tags = OggVorbis(path)
             artist = (tags.get("artist") or [""])[0].strip()
             year = (tags.get("date") or [""])[0].strip()[:4]
+            genre = (tags.get("genre") or [""])[0].strip()
         else:
-            return "", ""
+            return "", "", ""
     except ID3NoHeaderError:
-        return "", ""
+        return "", "", ""
     except Exception:
-        return "", ""
-    return artist, year
+        return "", "", ""
+    return artist, year, genre
 
 
-def parse_artists_folder(directory: str, recursive: bool = False) -> tuple[Counter, Counter, dict[str, set]]:
+def parse_artists_folder(directory: str, recursive: bool = False, strict: bool = False) -> tuple[Counter, Counter, dict[str, set]]:
     artists: Counter = Counter()
     years: Counter = Counter()
     year_artists: defaultdict[str, set] = defaultdict(set)
@@ -144,15 +150,31 @@ def parse_artists_folder(directory: str, recursive: bool = False) -> tuple[Count
         print(f"No MP3/FLAC/WAV/M4A/OGG files found in {directory}")
         sys.exit(1)
 
+    skipped_remaster = 0
+    skipped_classical = 0
     print(f"Reading tags from {len(files):,} files…", flush=True)
     for path in files:
-        artist, year = _read_tags(path)
+        if strict and "Remaster" in path.name:
+            skipped_remaster += 1
+            continue
+        artist, year, genre = _read_tags(path)
+        if strict and genre.casefold() == "classical":
+            skipped_classical += 1
+            continue
         if artist:
             artists[artist] += 1
         if year.isdigit() and len(year) == 4:
             years[year] += 1
             if artist:
                 year_artists[year].add(artist)
+
+    if skipped_remaster or skipped_classical:
+        parts = []
+        if skipped_remaster:
+            parts.append(f"{skipped_remaster:,} with 'Remaster' in filename")
+        if skipped_classical:
+            parts.append(f"{skipped_classical:,} with genre 'Classical'")
+        print(f"Skipped {', '.join(parts)} (--strict)", flush=True)
 
     return artists, years, dict(year_artists)
 
@@ -638,6 +660,7 @@ def main() -> None:
     parser.add_argument("folder", metavar="DIR", help="Directory of MP3/FLAC/WAV/M4A/OGG files (reads tags)")
     parser.add_argument("--artists", metavar="FILE", help=argparse.SUPPRESS)
     parser.add_argument("--flat", action="store_true", help="Search only the given folder, not subfolders")
+    parser.add_argument("--strict", action="store_true", help="Skip songs with 'Remaster' in filename or genre 'Classical'")
     parser.add_argument("--country", action="store_true", help="Fetch artist countries from MusicBrainz and plot by country")
     parser.add_argument("--genre", action="store_true", help="Fetch artist genres from MusicBrainz and plot by genre")
     parser.add_argument("--playlist", metavar="DESC", help="Create an AI MP3 playlist matching the given description (requires ANTHROPIC_API_KEY and ffmpeg)")
@@ -650,7 +673,7 @@ def main() -> None:
     if args.artists:
         artists, years, year_artists = parse_artists_txt(args.artists)
     else:
-        artists, years, year_artists = parse_artists_folder(args.folder, recursive=not args.flat)
+        artists, years, year_artists = parse_artists_folder(args.folder, recursive=not args.flat, strict=args.strict)
 
     if not artists:
         print("No artist data found.")
