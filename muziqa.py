@@ -70,7 +70,7 @@ _ISO_NAMES = {
 }
 
 
-def parse_artists_txt(filepath: str) -> tuple[Counter, Counter, dict[str, set]]:
+def parse_artists_txt(filepath: str) -> tuple[Counter, Counter, dict[str, set], dict[str, str]]:
     artist_pattern = re.compile(r"Artist:\s*(.+?)\s*,\s*Year:")
     year_pattern = re.compile(r"Year:\s*(\d{4})")
     artists: Counter = Counter()
@@ -88,7 +88,7 @@ def parse_artists_txt(filepath: str) -> tuple[Counter, Counter, dict[str, set]]:
                 years[year] += 1
                 if name:
                     year_artists[year].add(name)
-    return artists, years, dict(year_artists)
+    return artists, years, dict(year_artists), {}
 
 
 def _collect_files(folder: Path, recursive: bool) -> list[Path]:
@@ -141,10 +141,11 @@ def _read_tags(path: Path) -> tuple[str, str, str]:
     return artist, year, genre
 
 
-def parse_artists_folder(directory: str, recursive: bool = False, strict: bool = False) -> tuple[Counter, Counter, dict[str, set]]:
+def parse_artists_folder(directory: str, recursive: bool = False, strict: bool = False) -> tuple[Counter, Counter, dict[str, set], dict[str, str]]:
     artists: Counter = Counter()
     years: Counter = Counter()
     year_artists: defaultdict[str, set] = defaultdict(set)
+    artist_genre_counts: defaultdict[str, Counter] = defaultdict(Counter)
     files = _collect_files(Path(directory), recursive)
     if not files:
         print(f"No MP3/FLAC/WAV/M4A/OGG files found in {directory}")
@@ -163,10 +164,14 @@ def parse_artists_folder(directory: str, recursive: bool = False, strict: bool =
             continue
         if artist:
             artists[artist] += 1
+            if genre:
+                artist_genre_counts[artist][genre] += 1
         if year.isdigit() and len(year) == 4:
             years[year] += 1
             if artist:
                 year_artists[year].add(artist)
+
+    artist_genres = {a: g.most_common(1)[0][0] for a, g in artist_genre_counts.items()} if artist_genre_counts else {}
 
     if skipped_remaster or skipped_classical:
         parts = []
@@ -176,7 +181,7 @@ def parse_artists_folder(directory: str, recursive: bool = False, strict: bool =
             parts.append(f"{skipped_classical:,} with genre 'Classical'")
         print(f"Skipped {', '.join(parts)} (--strict)", flush=True)
 
-    return artists, years, dict(year_artists)
+    return artists, years, dict(year_artists), artist_genres
 
 
 def _aggregate_decades(
@@ -449,12 +454,15 @@ def plot_genre(
     mb_cache: dict[str, dict[str, str]],
     output: str = "muziqa_genre.png",
     top: int = 20,
+    file_genres: dict[str, str] | None = None,
 ) -> None:
     genre_tracks: Counter = Counter()
     for artist, count in artists.items():
         genre = mb_cache.get(artist, {}).get("genre", "")
         if genre == "__none__":
             genre = ""
+        if not genre and file_genres:
+            genre = file_genres.get(artist, "")
         name = genre if genre else "Unknown"
         genre_tracks[name] += count
 
@@ -671,9 +679,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.artists:
-        artists, years, year_artists = parse_artists_txt(args.artists)
+        artists, years, year_artists, artist_genres = parse_artists_txt(args.artists)
     else:
-        artists, years, year_artists = parse_artists_folder(args.folder, recursive=not args.flat, strict=args.strict)
+        artists, years, year_artists, artist_genres = parse_artists_folder(args.folder, recursive=not args.flat, strict=args.strict)
 
     if not artists:
         print("No artist data found.")
@@ -690,7 +698,7 @@ def main() -> None:
         if args.country:
             plot_country(artists, mb_cache, _infix_output(args.output, "_country"), args.top)
         if args.genre:
-            plot_genre(artists, mb_cache, _infix_output(args.output, "_genre"), args.top)
+            plot_genre(artists, mb_cache, _infix_output(args.output, "_genre"), args.top, artist_genres)
 
     if args.playlist:
         files = _collect_files(Path(args.folder), recursive=not args.flat)
