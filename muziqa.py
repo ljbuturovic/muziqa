@@ -111,27 +111,43 @@ def _read_tags(path: Path) -> tuple[str, str, str]:
             artist = str(tags["TPE1"]).strip() if "TPE1" in tags else ""
             year = str(tags["TDRC"]).strip()[:4] if "TDRC" in tags else ""
             genre = str(tags["TCON"]).strip() if "TCON" in tags else ""
+            if genre.casefold() == "classical":
+                artist = str(tags["TCOM"]).strip() if "TCOM" in tags else artist
         elif suffix == ".flac":
             tags = FLAC(path)
             artist = (tags.get("artist") or [""])[0].strip()
             year = (tags.get("date") or [""])[0].strip()[:4]
             genre = (tags.get("genre") or [""])[0].strip()
+            if genre.casefold() == "classical":
+                composer = (tags.get("composer") or [""])[0].strip()
+                if composer:
+                    artist = composer
         elif suffix == ".wav":
             tags = WAVE(path)
             id3 = tags.tags
             artist = str(id3["TPE1"]).strip() if id3 and "TPE1" in id3 else ""
             year = str(id3["TDRC"]).strip()[:4] if id3 and "TDRC" in id3 else ""
             genre = str(id3["TCON"]).strip() if id3 and "TCON" in id3 else ""
+            if genre.casefold() == "classical":
+                artist = str(id3["TCOM"]).strip() if id3 and "TCOM" in id3 else artist
         elif suffix == ".m4a":
             tags = MP4(path)
             artist = (tags.get("©ART") or [""])[0].strip()
             year = (tags.get("©day") or [""])[0].strip()[:4]
             genre = (tags.get("©gen") or [""])[0].strip()
+            if genre.casefold() == "classical":
+                composer = (tags.get("©wrt") or [""])[0].strip()
+                if composer:
+                    artist = composer
         elif suffix == ".ogg":
             tags = OggVorbis(path)
             artist = (tags.get("artist") or [""])[0].strip()
             year = (tags.get("date") or [""])[0].strip()[:4]
             genre = (tags.get("genre") or [""])[0].strip()
+            if genre.casefold() == "classical":
+                composer = (tags.get("composer") or [""])[0].strip()
+                if composer:
+                    artist = composer
         else:
             return "", "", ""
     except ID3NoHeaderError:
@@ -484,7 +500,7 @@ def plot_genre(
 
 
 def _read_track_info(path: Path) -> dict | None:
-    """Return {artist, title, duration_sec, path} or None if unreadable."""
+    """Return {artist, title, year, duration_sec, genre, path} or None if unreadable."""
     from mutagen.id3 import ID3NoHeaderError
     from mutagen.mp3 import MP3
     from mutagen.flac import FLAC
@@ -500,32 +516,53 @@ def _read_track_info(path: Path) -> dict | None:
             artist = str(tags.get("TPE1", "")).strip()
             title = str(tags.get("TIT2", "")).strip()
             year = str(tags.get("TDRC", "")).strip()[:4]
+            genre = str(tags.get("TCON", "")).strip()
             duration = audio.info.length
+            if genre.casefold() == "classical":
+                artist = str(tags.get("TCOM", "")).strip() or artist
         elif suffix == ".flac":
             audio = FLAC(path)
             artist = (audio.get("artist") or [""])[0].strip()
             title = (audio.get("title") or [""])[0].strip()
             year = (audio.get("date") or [""])[0].strip()[:4]
+            genre = (audio.get("genre") or [""])[0].strip()
             duration = audio.info.length
+            if genre.casefold() == "classical":
+                composer = (audio.get("composer") or [""])[0].strip()
+                if composer:
+                    artist = composer
         elif suffix == ".wav":
             audio = WAVE(path)
             id3 = audio.tags
             artist = str(id3.get("TPE1", "")).strip() if id3 else ""
             title = str(id3.get("TIT2", "")).strip() if id3 else ""
             year = str(id3.get("TDRC", "")).strip()[:4] if id3 else ""
+            genre = str(id3.get("TCON", "")).strip() if id3 else ""
             duration = audio.info.length
+            if genre.casefold() == "classical":
+                artist = str(id3.get("TCOM", "")).strip() if id3 else artist
         elif suffix == ".m4a":
             audio = MP4(path)
             artist = (audio.get("©ART") or [""])[0].strip()
             title = (audio.get("©nam") or [""])[0].strip()
             year = (audio.get("©day") or [""])[0].strip()[:4]
+            genre = (audio.get("©gen") or [""])[0].strip()
             duration = audio.info.length
+            if genre.casefold() == "classical":
+                composer = (audio.get("©wrt") or [""])[0].strip()
+                if composer:
+                    artist = composer
         elif suffix == ".ogg":
             audio = OggVorbis(path)
             artist = (audio.get("artist") or [""])[0].strip()
             title = (audio.get("title") or [""])[0].strip()
             year = (audio.get("date") or [""])[0].strip()[:4]
+            genre = (audio.get("genre") or [""])[0].strip()
             duration = audio.info.length
+            if genre.casefold() == "classical":
+                composer = (audio.get("composer") or [""])[0].strip()
+                if composer:
+                    artist = composer
         else:
             return None
     except ID3NoHeaderError:
@@ -537,6 +574,7 @@ def _read_track_info(path: Path) -> dict | None:
         "artist": artist or path.stem,
         "title": title or path.stem,
         "year": year,
+        "genre": genre,
         "duration_sec": duration,
         "path": str(path),
     }
@@ -585,7 +623,7 @@ def create_playlist(files: list[Path], description: str, output: str, model: str
     ]
     track_list = "\n".join(lines)
 
-    prompt = f"""Here is a music collection with {len(tracks):,} tracks (format: index | artist | title | duration):
+    prompt = f"""Here is a music collection with {len(tracks):,} tracks (format: index | artist/composer | title | duration):
 
 {track_list}
 
@@ -632,7 +670,8 @@ Select tracks from this collection that satisfy ALL constraints. Return ONLY a J
 
     print(f"\nPlaylist: {len(selected)} tracks")
     for i, t in enumerate(selected, 1):
-        print(f"  {i:2}. {t['artist']} — {t['title']}")
+        label = "Composer" if t.get("genre", "").casefold() == "classical" else "Artist"
+        print(f"  {i:2}. [{label}] {t['artist']} — {t['title']}")
 
     print("\nConcatenating…", flush=True)
     fmt_map = {".mp3": "mp3", ".flac": "flac", ".wav": "wav", ".m4a": "mp4", ".ogg": "ogg"}
@@ -652,7 +691,7 @@ Select tracks from this collection that satisfy ALL constraints. Return ONLY a J
     csv_path = Path(output).with_stem(Path(output).stem + "_tracks").with_suffix(".csv")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["#", "title", "artist", "year", "file"])
+        writer.writerow(["#", "title", "artist/composer", "year", "file"])
         for i, t in enumerate(selected, 1):
             writer.writerow([i, t["title"], t["artist"], t["year"], Path(t["path"]).name])
     print(f"Saved → {csv_path}")
