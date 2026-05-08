@@ -271,6 +271,51 @@ def fetch_mb_data(artists: Counter, cache_path: Path, version: str,
     return cache
 
 
+def _fmt_fans(n: int) -> str:
+    """Format fan count: raw if <1000, '5K' if 1000-999999, '3M' if >=1M."""
+    if n >= 1_000_000:
+        return f"{n // 1_000_000}M"
+    if n >= 1_000:
+        return f"{n // 1_000}K"
+    return str(n)
+
+
+def _fetch_deezer_fans(artist: str) -> int:
+    """Return nb_fan for artist from Deezer API, 0 on failure."""
+    import urllib.request
+    try:
+        q = urllib.parse.quote(artist)
+        url = f"https://api.deezer.com/search/artist?q={q}&limit=1"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+            hits = data.get("data", [])
+            if hits:
+                return hits[0].get("nb_fan", 0)
+    except Exception:
+        pass
+    return 0
+
+
+def fetch_deezer_fans(artists: list[str], cache_path: Path) -> dict[str, int]:
+    """Batch-fetch Deezer fan counts with local cache. Returns {artist: nb_fan}."""
+    cache: dict[str, int] = {}
+    if cache_path.exists():
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+
+    to_fetch = [a for a in artists if a not in cache]
+    if to_fetch:
+        print(f"Fetching Deezer fan counts for {len(to_fetch):,} artists…", flush=True)
+        for i, artist in enumerate(to_fetch, 1):
+            cache[artist] = _fetch_deezer_fans(artist)
+            if i % 10 == 0 or i == len(to_fetch):
+                print(f"  {i:,}/{len(to_fetch):,}", flush=True)
+                cache_path.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+            time.sleep(0.12)  # 50 req / 5 sec = 1 per 100ms
+
+    return cache
+
+
 def _style_ax(ax) -> None:
     ax.set_facecolor("#0f0f1a")
     ax.tick_params(axis="x", colors="#666680", labelsize=9)
@@ -282,7 +327,7 @@ def _style_ax(ax) -> None:
     ax.set_axisbelow(True)
 
 
-def _plot_artists(ax, artists: Counter, top: int, cmap) -> None:
+def _plot_artists(ax, artists: Counter, top: int, cmap, fans: dict[str, int] | None = None) -> None:
     top_artists = artists.most_common(top)
     if len(top_artists) < top:
         print(f"Warning: only {len(top_artists)} artists found.")
@@ -304,12 +349,24 @@ def _plot_artists(ax, artists: Counter, top: int, cmap) -> None:
     ax.set_xlabel("Tracks", labelpad=8, color="#888899")
     ax.xaxis.grid(True, color="#222240", linewidth=0.6)
     _style_ax(ax)
-    ax.set_yticklabels(names, fontsize=10.5, color="#ffffff", fontweight="bold")
+
+    # Annotate names with Deezer fan counts
+    if fans:
+        display_names = [
+            f"{name} ({_fmt_fans(fans.get(name, 0))})" if fans.get(name, 0) else name
+            for name in names
+        ]
+    else:
+        display_names = names
+    ax.set_yticklabels(display_names, fontsize=10.5, color="#ffffff", fontweight="bold")
 
     total = sum(artists.values())
     unique = len(artists)
+    title = f"Top {top} Artists  ·  {total:,} tracks  ·  {unique:,} unique artists"
+    if fans:
+        title += "  ·  Deezer fans"
     ax.set_title(
-        f"Top {top} Artists  ·  {total:,} tracks  ·  {unique:,} unique artists",
+        title,
         fontsize=13, fontweight="bold", color="#c8c8e0", pad=14,
     )
 
@@ -367,12 +424,13 @@ def plot_main(
     decades: Counter,
     output: str = "muziqa.png",
     top: int = 20,
+    fans: dict[str, int] | None = None,
 ) -> None:
     fig, (ax_artists, ax_decades) = plt.subplots(1, 2, figsize=(22, 9))
     fig.patch.set_facecolor("#0f0f1a")
     cmap = plt.colormaps["plasma"]
 
-    _plot_artists(ax_artists, artists, top, cmap)
+    _plot_artists(ax_artists, artists, top, cmap, fans)
 
     sorted_decades = sorted(decades.items())
     d_labels, d_vals = zip(*sorted_decades) if sorted_decades else ([], [])
@@ -727,7 +785,13 @@ def main() -> None:
         sys.exit(1)
 
     decades, _ = _aggregate_decades(years, year_artists)
-    plot_main(artists, decades, args.output, args.top)
+
+    # Fetch Deezer fan counts for top artists
+    top_artists = [a for a, _ in artists.most_common(args.top)]
+    deezer_cache_path = Path(args.output).with_name("muziqa_deezer_cache.json")
+    fans = fetch_deezer_fans(top_artists, deezer_cache_path)
+
+    plot_main(artists, decades, args.output, args.top, fans)
     plot_years(years, year_artists, _infix_output(args.output, "_years"))
 
     if args.country or args.genre:
