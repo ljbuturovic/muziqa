@@ -327,7 +327,7 @@ def _style_ax(ax) -> None:
     ax.set_axisbelow(True)
 
 
-def _plot_artists(ax, artists: Counter, top: int, cmap, fans: dict[str, int] | None = None) -> None:
+def _plot_artists(ax, artists: Counter, top: int, cmap, fans: dict[str, int] | None = None, swift_fans: int = 0) -> None:
     top_artists = artists.most_common(top)
     if len(top_artists) < top:
         print(f"Warning: only {len(top_artists)} artists found.")
@@ -364,7 +364,7 @@ def _plot_artists(ax, artists: Counter, top: int, cmap, fans: dict[str, int] | N
     unique = len(artists)
     title = f"Top {top} Artists  ·  {total:,} tracks  ·  {unique:,} unique artists"
     if fans:
-        title += "  ·  Deezer fans"
+        title += f"  ·  Deezer fans (Swift: {_fmt_fans(swift_fans)})"
     ax.set_title(
         title,
         fontsize=13, fontweight="bold", color="#c8c8e0", pad=14,
@@ -425,12 +425,13 @@ def plot_main(
     output: str = "muziqa.png",
     top: int = 20,
     fans: dict[str, int] | None = None,
+    swift_fans: int = 0,
 ) -> None:
     fig, (ax_artists, ax_decades) = plt.subplots(1, 2, figsize=(22, 9))
     fig.patch.set_facecolor("#0f0f1a")
     cmap = plt.colormaps["plasma"]
 
-    _plot_artists(ax_artists, artists, top, cmap, fans)
+    _plot_artists(ax_artists, artists, top, cmap, fans, swift_fans)
 
     sorted_decades = sorted(decades.items())
     d_labels, d_vals = zip(*sorted_decades) if sorted_decades else ([], [])
@@ -791,7 +792,10 @@ def main() -> None:
     deezer_cache_path = Path(args.output).with_name("muziqa_deezer_cache.json")
     fans = fetch_deezer_fans(top_artists, deezer_cache_path)
 
-    plot_main(artists, decades, args.output, args.top, fans)
+    # Fetch Taylor Swift as a universal reference point
+    swift_fans = _fetch_deezer_fans("Taylor Swift") if fans else 0
+
+    plot_main(artists, decades, args.output, args.top, fans, swift_fans)
     plot_years(years, year_artists, _infix_output(args.output, "_years"))
 
     if args.country or args.genre:
